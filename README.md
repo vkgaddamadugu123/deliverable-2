@@ -1,11 +1,14 @@
-# COVID-19 Data Pipeline - End-to-End GCP Medallion Architecture
+# COVID-19 Data Pipeline - End-to-End GCP Medallion Architecture with Streamlit Dashboard
 
-A scalable, cloud-native data pipeline that automatically extracts COVID-19 surveillance data from the CDC API, processes it through multiple transformation layers using Google Cloud Platform services, and stores it in BigQuery following the Medallion Architecture pattern (Bronze → Silver → Gold).
+A scalable, cloud-native data pipeline that automatically extracts COVID-19 surveillance data from the CDC API, processes it through multiple transformation layers using Google Cloud Platform services, stores it in BigQuery following the Medallion Architecture pattern (Bronze → Silver → Gold), and visualizes the results through a containerized Streamlit dashboard deployed on Google Kubernetes Engine.
 
 ![GCP](https://img.shields.io/badge/Google_Cloud-4285F4?logo=google-cloud&logoColor=white)
 ![BigQuery](https://img.shields.io/badge/BigQuery-669DF6?logo=google-cloud&logoColor=white)
 ![Apache Airflow](https://img.shields.io/badge/Apache_Airflow-017CEE?logo=apache-airflow&logoColor=white)
 ![Apache Spark](https://img.shields.io/badge/Apache_Spark-E25A1C?logo=apache-spark&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white)
 
 ## 📋 Table of Contents
 
@@ -13,6 +16,7 @@ A scalable, cloud-native data pipeline that automatically extracts COVID-19 surv
 - [Data Flow Architecture](#data-flow-architecture)
 - [Medallion Architecture Layers](#medallion-architecture-layers)
 - [Pipeline Components](#pipeline-components)
+- [Phase 2: Streamlit Dashboard & GKE Deployment](#phase-2-streamlit-dashboard--gke-deployment)
 - [Project Structure](#project-structure)
 - [Setup and Deployment](#setup-and-deployment)
 - [Running the Pipeline](#running-the-pipeline)
@@ -54,15 +58,22 @@ graph TB
         I[GCS Signal Files<br/>Pipeline Coordination]
     end
     
+    subgraph "Visualization Layer"
+        J[Streamlit Dashboard<br/>Docker Container]
+        K[Google Kubernetes Engine<br/>GKE Cluster]
+    end
+    
     A --> B
     B --> C
     C --> D
     D --> E
     D --> I
     I --> B
-    B --> H
+    B >>> H
     H --> F
     H --> G
+    G --> J
+    J --> K
     
     style A fill:#e1f5fe
     style E fill:#fff3e0
@@ -70,6 +81,8 @@ graph TB
     style G fill:#e8f5e8
     style B fill:#fce4ec
     style H fill:#f1f8e9
+    style J fill:#ffebee
+    style K fill:#e3f2fd
 ```
 
 ### Architecture Principles
@@ -241,7 +254,85 @@ spark.conf.set("temporaryGcsBucket", TEMP_GCS_BUCKET)
 spark.conf.set("spark.sql.shuffle.partitions", "8")  # Optimized for 1M records
 ```
 
-## 📁 Project Structure
+## � Phase 2: Streamlit Dashboard & GKE Deployment
+
+### Overview
+
+Phase 2 extends the pipeline with a **Streamlit dashboard** that visualizes COVID-19 data from the Gold layer BigQuery table. The dashboard is containerized with Docker and deployed to Google Kubernetes Engine (GKE) with proper authentication and scaling.
+
+### Dashboard Features
+
+- **Real-time Data**: Connects directly to BigQuery Gold layer
+- **Interactive Visualization**: Line charts showing trends over time
+- **State-level Analysis**: Cases and deaths by state and month
+- **Caching**: 10-minute data cache for optimal performance
+- **Responsive Design**: Clean, professional Streamlit interface
+
+### Architecture Components
+
+| Component | Technology | Purpose | Configuration |
+|-----------|------------|---------|---------------|
+| **Dashboard App** | Streamlit | Data visualization and UI | Python 3.12, BigQuery client |
+| **Container** | Docker | Application packaging | Multi-stage build, slim image |
+| **Registry** | Artifact Registry | Image storage | Regional repository |
+| **Orchestration** | Google Kubernetes Engine | Container deployment | Autopilot cluster |
+| **Authentication** | Workload Identity | Secure BigQuery access | Service account binding |
+
+### Deployment Flow
+
+```mermaid
+graph LR
+    subgraph "Development"
+        A[Streamlit App<br/>app.py]
+        B[Docker Image<br/>Dockerfile]
+    end
+    
+    subgraph "Registry"
+        C[Artifact Registry<br/>covid-dashboard:v1]
+    end
+    
+    subgraph "Kubernetes"
+        D[GKE Autopilot<br/>Cluster]
+        E[LoadBalancer<br/>Service]
+    end
+    
+    subgraph "Data Source"
+        F[BigQuery Gold<br/>covid_state_monthly]
+    end
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    F --> A
+    
+    style A fill:#ffebee
+    style B fill:#e3f2fd
+    style C fill:#f3e5f5
+    style D fill:#e8f5e8
+    style E fill:#fff3e0
+    style F fill:#e8f5e8
+```
+
+### Quick Deployment Commands
+
+```bash
+# Build and push Docker image
+cd streamlit_dashboard
+gcloud builds submit --tag us-central1-docker.pkg.dev/skilful-union-474420-c7/covid-docker-repo/covid-dashboard:v1
+
+# Create GKE cluster
+gcloud container clusters create-auto covid-dashboard-cluster --region us-central1
+
+# Deploy application
+kubectl apply -f k8s/covid-dashboard-deployment.yaml
+kubectl apply -f k8s/covid-dashboard-service.yaml
+
+# Get external IP
+kubectl get services covid-dashboard-service
+```
+
+## �📁 Project Structure
 
 ```
 Deliverable-2/
@@ -249,7 +340,18 @@ Deliverable-2/
 ├── cf_Source_main.py               # Cloud Function (GCS → BigQuery)
 ├── covid_transform.py              # Spark ETL (Silver/Gold Processing)
 ├── cf_requirements.txt             # Cloud Function Dependencies
-├── Technical_Documentation.md      # Technical Documentation
+├── streamlit_dashboard/            # Phase 2: Dashboard Application
+│   ├── app.py                      # Streamlit dashboard application
+│   ├── requirements.txt            # Dashboard dependencies
+│   └── Dockerfile                  # Container configuration
+├── k8s/                           # Kubernetes deployment manifests
+│   ├── covid-dashboard-deployment.yaml
+│   └── covid-dashboard-service.yaml
+├── scripts/                       # Deployment automation scripts
+│   ├── build-and-push.sh          # Docker build and push
+│   └── deploy-to-gke.sh            # GKE deployment script
+├── CONFIG.md                       # Configuration Reference
+├── TECHNICAL_DOCUMENTATION.md      # Technical Documentation
 └── README.md                       # This Documentation
 ```
 
@@ -259,6 +361,10 @@ Deliverable-2/
 - **`cf_Source_main.py`**: Event-driven Cloud Function that automatically loads JSON data from GCS to BigQuery Bronze layer
 - **`covid_transform.py`**: Spark application for data cleaning (Bronze→Silver) and aggregation (Silver→Gold) transformations
 - **`cf_requirements.txt`**: Python dependencies for Cloud Function (BigQuery, Storage, Functions Framework)
+- **`streamlit_dashboard/app.py`**: Interactive dashboard for visualizing COVID-19 data from BigQuery Gold layer
+- **`streamlit_dashboard/Dockerfile`**: Container configuration for dashboard deployment
+- **`k8s/*.yaml`**: Kubernetes deployment and service manifests for GKE
+- **`scripts/*.sh`**: Automated deployment scripts for Docker and GKE
 - **`CONFIG.md`**: Comprehensive configuration reference with all settings and commands
 
 ## 🚀 Setup and Deployment
@@ -309,6 +415,16 @@ gcloud dataproc clusters create covid-dp-cluster \
     --metadata=bigquery-connector-version=1.2.0 \
     --metadata=spark-bigquery-connector-version=0.28.0 \
     --max-age=3h
+
+# Create Artifact Registry for Docker images
+gcloud artifacts repositories create covid-docker-repo \
+    --repository-format=docker \
+    --location=us-central1 \
+    --description="COVID Dashboard Docker Repository"
+
+# Create GKE Autopilot cluster for dashboard
+gcloud container clusters create-auto covid-dashboard-cluster \
+    --region=us-central1
 ```
 
 ### 3. Component Deployment
@@ -341,6 +457,10 @@ COMPOSER_BUCKET=$(gcloud composer environments describe covid-pipeline-env \
     --location=us-central1 \
     --format="get(config.dagGcsPrefix)")
 gsutil cp covid_medallion_dag.py ${COMPOSER_BUCKET}
+
+# Phase 2: Build and deploy Streamlit dashboard
+./scripts/build-and-push.sh       # Build and push Docker image
+./scripts/deploy-to-gke.sh         # Deploy to GKE with proper IAM setup
 ```
 
 ## ▶️ Running the Pipeline
@@ -379,7 +499,26 @@ gsutil ls gs://my-first-project-covid-etl-bucket/signals/
 bq query --use_legacy_sql=false "SELECT COUNT(*) as bronze_count FROM \`$PROJECT_ID.medallion_bronze.raw_covid_cases\`"
 bq query --use_legacy_sql=false "SELECT COUNT(*) as silver_count FROM \`$PROJECT_ID.medallion_silver.covid_cases_clean\`"
 bq query --use_legacy_sql=false "SELECT COUNT(*) as gold_count FROM \`$PROJECT_ID.medallion_gold.covid_state_monthly\`"
+
+# Monitor Streamlit dashboard deployment
+kubectl get deployments covid-dashboard
+kubectl get services covid-dashboard-service
+kubectl logs deployment/covid-dashboard
 ```
+
+### Accessing the Dashboard
+
+Once the GKE deployment is complete, get the external IP address:
+
+```bash
+kubectl get services covid-dashboard-service
+```
+
+The dashboard will be available at `http://EXTERNAL-IP` and displays:
+- Interactive data table with COVID-19 cases and deaths by state and month
+- Time series line chart showing national trends
+- Data sourced directly from BigQuery Gold layer
+- Auto-refresh every 10 minutes
 
 ## ✅ Data Validation
 
@@ -567,14 +706,25 @@ echo "Cleanup complete. All resources deleted."
 
 Your COVID-19 data pipeline is successfully deployed and operational when:
 
+**Phase 1 - Data Pipeline:**
 - ✅ **Infrastructure**: All GCP resources created without errors
 - ✅ **Pipeline Execution**: Airflow DAG completes all tasks successfully
 - ✅ **Data Flow**: All three BigQuery datasets contain expected data volumes
 - ✅ **Data Quality**: Validation queries return reasonable results
+
+**Phase 2 - Dashboard & Visualization:**
+- ✅ **Docker Build**: Streamlit container builds and pushes to Artifact Registry
+- ✅ **GKE Deployment**: Kubernetes cluster and workloads deploy successfully
+- ✅ **Dashboard Access**: External IP accessible with working visualizations
+- ✅ **Data Integration**: Dashboard displays current BigQuery Gold data
+
+**Overall System:**
 - ✅ **Monitoring**: No error messages in service logs
 - ✅ **Cost Control**: Resource usage within expected budget ranges
+- ✅ **Security**: Proper IAM and Workload Identity configuration
 
 ### Expected Data Volumes
 - **Bronze Layer**: ~1,000,000 raw records from CDC API
 - **Silver Layer**: ~800,000 cleaned records (after filtering)
 - **Gold Layer**: ~15,000 state-month aggregation records
+- **Dashboard**: Real-time visualization of Gold layer data

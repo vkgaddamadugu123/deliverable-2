@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: covid-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: covid-dashboard
+  template:
+    metadata:
+      labels:
+        app: covid-dashboard
+    spec:
+      serviceAccountName: default
+      containers:
+      - name: covid-dashboard
+        image: us-central1-docker.pkg.dev/skilful-union-474420-c7/covid-docker-repo/covid-dashboard:v1
+        ports:
+        - containerPort: 8080
+        env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "skilful-union-474420-c7"
