@@ -69,7 +69,7 @@ graph TB
     D --> E
     D --> I
     I --> B
-    B >>> H
+    B --> H
     H --> F
     H --> G
     G --> J

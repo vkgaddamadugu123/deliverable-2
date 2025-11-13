@@ -13,6 +13,10 @@ spec:
         app: covid-dashboard
     spec:
       serviceAccountName: default
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       containers:
       - name: covid-dashboard
         image: us-central1-docker.pkg.dev/skilful-union-474420-c7/covid-docker-repo/covid-dashboard:v1
@@ -21,3 +25,11 @@ spec:
         env:
         - name: GOOGLE_CLOUD_PROJECT
           value: "skilful-union-474420-c7"
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
